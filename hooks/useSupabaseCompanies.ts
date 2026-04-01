@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import type { Company } from '../types';
 
@@ -40,8 +40,17 @@ export function useSupabaseCompanies(userId: string | undefined): [Company[], (v
 
     fetchCompanies();
 
+    const subscription = supabase
+      .channel('companies_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'companies', filter: `owner_id=eq.${userId}` }, (payload) => {
+        // Re-fetch companies when there's a change
+        fetchCompanies();
+      })
+      .subscribe();
+
     return () => {
       isMounted = false;
+      subscription.unsubscribe();
     };
   }, [userId]);
 

@@ -12,6 +12,7 @@ import Auth from './components/auth/Auth';
 import Landing from './components/Landing';
 import CompanyManager from './components/CompanyManager';
 import UserProfile from './components/UserProfile';
+import SubscriptionPrompt from './components/SubscriptionPrompt';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabaseCompanies } from './hooks/useSupabaseCompanies';
 import type { Company, Client, Item, Invoice, Transporter, User, CompanyDetails, BankAccount, RecurringInvoice, RecurringFrequency, DraftInvoice, InvoiceItem, StockHistoryEntry, Quotation } from './types';
@@ -72,6 +73,7 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isCompanySwitcherOpen, setIsCompanySwitcherOpen] = useState(false);
+  const [isSubscriptionPromptOpen, setIsSubscriptionPromptOpen] = useState(false);
   
   // Profile State
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -81,6 +83,19 @@ const App: React.FC = () => {
   const [draftInvoice, setDraftInvoice] = useState<DraftInvoice>(emptyDraftInvoice);
 
   const searchInputRef = React.useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionId = urlParams.get('session_id');
+    if (sessionId) {
+      // Clear the session_id from the URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      alert('Subscription successful! You can now create invoices.');
+      // The webhook will update the database, and the realtime subscription will update the UI.
+      // For immediate feedback, we could optimistically update the active company here,
+      // but waiting for the webhook is safer.
+    }
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -174,6 +189,19 @@ const App: React.FC = () => {
   
   const handleUpdateProfile = (updatedUser: User) => {
       setCurrentUser(updatedUser);
+  };
+
+  const handleSetActiveView = (view: string) => {
+    if (view === 'NewInvoice' || view === 'NewQuotation') {
+      const sub = activeCompany?.subscription;
+      const isFree = !sub || sub.plan === 'free';
+      // If user is free or subscription is not active, prompt to pay
+      if (isFree || sub?.status !== 'active') {
+        setIsSubscriptionPromptOpen(true);
+        return;
+      }
+    }
+    setActiveView(view);
   };
 
   // --- Company Handlers ---
@@ -438,6 +466,13 @@ const App: React.FC = () => {
             updatedInvoices = updatedInvoices.map(inv => inv.id === updatedInvoice.id ? updatedInvoice : inv);
         } else {
             // Create Mode
+            const sub = activeCompany.subscription;
+            if (!sub || sub.status !== 'active' || sub.invoiceCount >= sub.invoiceLimit) {
+                alert('You have reached your invoice limit. Please upgrade your plan.');
+                setIsSubscriptionPromptOpen(true);
+                return;
+            }
+
             const newInvoiceData = invoiceData as Omit<Invoice, 'id' | 'status'>;
             const nextNumber = Number(activeCompany.details.nextInvoiceNumber || 1);
             const expectedInvoiceNumber = `${activeCompany.details.invoicePrefix || 'INV-'}${nextNumber.toString().padStart(3, '0')}`;
@@ -464,12 +499,18 @@ const App: React.FC = () => {
             if (newInvoiceData.invoiceNumber === expectedInvoiceNumber) updatedDetails.nextInvoiceNumber = nextNumber + 1;
         }
         
+        const updatedSubscription = activeCompany.subscription ? {
+            ...activeCompany.subscription,
+            invoiceCount: ('id' in invoiceData) ? activeCompany.subscription.invoiceCount : (activeCompany.subscription.invoiceCount || 0) + 1
+        } : undefined;
+
         handleUpdateCompany({ 
             ...activeCompany, 
             items: updatedItems, 
             invoices: updatedInvoices.sort((a,b) => b.invoiceNumber.localeCompare(a.invoiceNumber, undefined, {numeric: true})), 
             details: updatedDetails,
-            stockHistory: [...(activeCompany.stockHistory || []), ...newHistoryLogs]
+            stockHistory: [...(activeCompany.stockHistory || []), ...newHistoryLogs],
+            subscription: updatedSubscription
         });
         
         setDraftInvoice(emptyDraftInvoice);
@@ -539,7 +580,7 @@ const App: React.FC = () => {
     const invoice = activeCompany?.invoices.find(inv => inv.id === invoiceId);
     if (invoice) {
       setInvoiceToEdit(invoice);
-      setActiveView('NewInvoice');
+      handleSetActiveView('NewInvoice');
     }
   };
 
@@ -547,7 +588,7 @@ const App: React.FC = () => {
       const quote = activeCompany?.quotations.find(q => q.id === quotationId);
       if (quote) {
           setInvoiceToEdit(quote);
-          setActiveView('NewQuotation');
+          handleSetActiveView('NewQuotation');
       }
   };
 
@@ -588,7 +629,7 @@ const App: React.FC = () => {
       });
       
       handleUpdateCompany({ ...activeCompany, quotations: updatedQuotes });
-      setActiveView('NewInvoice');
+      handleSetActiveView('NewInvoice');
   };
 
   if (!isAuthReady || isLoadingCompanies) {
@@ -597,7 +638,7 @@ const App: React.FC = () => {
 
   if (!currentUser) {
     if (showAuth) {
-      return <div className="w-full h-screen bg-slate-100 dark:bg-secondary-dark flex items-center justify-center"><Auth onBack={() => setShowAuth(false)} /></div>;
+      return <Auth onBack={() => setShowAuth(false)} />;
     }
     return <Landing onGetStarted={() => setShowAuth(true)} />;
   }
@@ -613,18 +654,18 @@ const App: React.FC = () => {
           invoices={activeCompany.invoices} 
           items={activeCompany.items} 
           company={activeCompany} 
-          setActiveView={setActiveView} 
+          setActiveView={handleSetActiveView} 
           setInvoiceFilter={setInvoiceFilter}
           setInventoryFilter={setInventoryFilter}
           onContinueDraft={() => {
             setInvoiceToEdit(null);
-            setActiveView('NewInvoice');
+            handleSetActiveView('NewInvoice');
           }}
         />;
-      case 'NewInvoice': return <NewInvoice company={activeCompany} saveInvoice={handleSaveInvoice} setActiveView={setActiveView} invoiceToEdit={invoiceToEdit as Invoice} clearEditingInvoice={() => setInvoiceToEdit(null)} onUpdateCompany={handleUpdateCompany} draftInvoice={draftInvoice} setDraftInvoice={setDraftInvoice} mode="invoice" />;
-      case 'NewQuotation': return <NewInvoice company={activeCompany} saveInvoice={handleSaveInvoice} setActiveView={setActiveView} invoiceToEdit={invoiceToEdit as Quotation} clearEditingInvoice={() => setInvoiceToEdit(null)} onUpdateCompany={handleUpdateCompany} draftInvoice={draftInvoice} setDraftInvoice={setDraftInvoice} mode="quote" />;
-      case 'Invoices': return <Invoices invoices={activeCompany.invoices} company={activeCompany} setActiveView={setActiveView} onEdit={handleEditInvoice} onDelete={handleDeleteInvoice} onStatusChange={handleUpdateInvoiceStatus} onBulkDelete={handleBulkDeleteInvoices} onBulkStatusChange={handleBulkStatusChange} onAddRecurring={handleAddRecurring} onUpdateRecurring={handleUpdateRecurring} onDeleteRecurring={handleDeleteRecurring} initialFilter={invoiceFilter} />;
-      case 'Quotations': return <Quotations quotations={activeCompany.quotations || []} company={activeCompany} setActiveView={setActiveView} onEdit={handleEditQuotation} onDelete={handleDeleteQuotation} onConvert={handleConvertQuoteToInvoice} onStatusChange={handleUpdateQuotationStatus} />;
+      case 'NewInvoice': return <NewInvoice company={activeCompany} saveInvoice={handleSaveInvoice} setActiveView={handleSetActiveView} invoiceToEdit={invoiceToEdit as Invoice} clearEditingInvoice={() => setInvoiceToEdit(null)} onUpdateCompany={handleUpdateCompany} draftInvoice={draftInvoice} setDraftInvoice={setDraftInvoice} mode="invoice" />;
+      case 'NewQuotation': return <NewInvoice company={activeCompany} saveInvoice={handleSaveInvoice} setActiveView={handleSetActiveView} invoiceToEdit={invoiceToEdit as Quotation} clearEditingInvoice={() => setInvoiceToEdit(null)} onUpdateCompany={handleUpdateCompany} draftInvoice={draftInvoice} setDraftInvoice={setDraftInvoice} mode="quote" />;
+      case 'Invoices': return <Invoices invoices={activeCompany.invoices} company={activeCompany} setActiveView={handleSetActiveView} onEdit={handleEditInvoice} onDelete={handleDeleteInvoice} onStatusChange={handleUpdateInvoiceStatus} onBulkDelete={handleBulkDeleteInvoices} onBulkStatusChange={handleBulkStatusChange} onAddRecurring={handleAddRecurring} onUpdateRecurring={handleUpdateRecurring} onDeleteRecurring={handleDeleteRecurring} initialFilter={invoiceFilter} />;
+      case 'Quotations': return <Quotations quotations={activeCompany.quotations || []} company={activeCompany} setActiveView={handleSetActiveView} onEdit={handleEditQuotation} onDelete={handleDeleteQuotation} onConvert={handleConvertQuoteToInvoice} onStatusChange={handleUpdateQuotationStatus} />;
       case 'Clients': return <Clients clients={activeCompany.clients} setClients={setClients} invoices={activeCompany.invoices} company={activeCompany} onEditInvoice={handleEditInvoice} onDeleteInvoice={handleDeleteInvoice} onStatusChange={handleUpdateInvoiceStatus} onBulkDelete={handleBulkDeleteClients} />;
       case 'Items': return <Items items={activeCompany.items} setItems={setItems} company={activeCompany} onBulkDelete={handleBulkDeleteItems} />;
       case 'Inventory': return <Inventory items={activeCompany.items} setItems={setItems} onBulkStockUpdate={handleBulkStockUpdate} stockHistory={activeCompany.stockHistory || []} initialFilter={inventoryFilter} />;
@@ -635,12 +676,12 @@ const App: React.FC = () => {
           invoices={activeCompany.invoices} 
           items={activeCompany.items} 
           company={activeCompany} 
-          setActiveView={setActiveView}
+          setActiveView={handleSetActiveView}
           setInvoiceFilter={setInvoiceFilter}
           setInventoryFilter={setInventoryFilter}
           onContinueDraft={() => {
             setInvoiceToEdit(null);
-            setActiveView('NewInvoice');
+            handleSetActiveView('NewInvoice');
           }}
         />
       );
@@ -651,7 +692,7 @@ const App: React.FC = () => {
         <div className="flex h-screen bg-slate-100 dark:bg-secondary-dark font-sans transition-all relative overflow-hidden">
             <Sidebar
                 activeView={activeView}
-                setActiveView={setActiveView}
+                setActiveView={handleSetActiveView}
                 theme={theme}
                 setTheme={setTheme}
                 userCompanies={userCompanies}
@@ -766,6 +807,49 @@ const App: React.FC = () => {
         <Modal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} title="User Profile">
             {currentUser && <UserProfile user={currentUser} onUpdateProfile={handleUpdateProfile} onClose={() => setIsProfileOpen(false)} />}
         </Modal>
+
+        <SubscriptionPrompt 
+          isOpen={isSubscriptionPromptOpen} 
+          onClose={() => setIsSubscriptionPromptOpen(false)} 
+          onSubscribe={async (plan) => {
+            if (!activeCompany) return;
+            try {
+              const response = await fetch('/api/create-cashfree-order', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  plan,
+                  companyId: activeCompany.id,
+                  customerEmail: currentUser?.email,
+                  customerName: currentUser?.name || 'Customer',
+                }),
+              });
+              
+              if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to create order');
+              }
+              
+              const { payment_session_id } = await response.json();
+              if (payment_session_id) {
+                // Initialize Cashfree
+                const cashfree = window.Cashfree({
+                  mode: "sandbox", // Change to "production" for live
+                });
+                
+                cashfree.checkout({
+                  paymentSessionId: payment_session_id,
+                  redirectTarget: "_self",
+                });
+              }
+            } catch (error) {
+              console.error('Error creating checkout session:', error);
+              alert('Failed to start checkout process. Please try again.');
+            }
+          }} 
+        />
     </div>
   );
 };

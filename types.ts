@@ -126,6 +126,14 @@ export interface StockHistoryEntry {
     referenceId?: string; // e.g., Invoice Number
 }
 
+export interface Subscription {
+  plan: 'free' | 'monthly' | 'quarterly' | 'yearly';
+  status: 'active' | 'past_due' | 'canceled' | 'incomplete';
+  currentPeriodEnd: string;
+  invoiceCount: number;
+  invoiceLimit: number;
+}
+
 export interface Company {
   id: string;
   ownerId: string;
@@ -138,6 +146,7 @@ export interface Company {
   quotations: Quotation[]; // Added quotations
   recurringInvoices: RecurringInvoice[];
   stockHistory: StockHistoryEntry[];
+  subscription?: Subscription;
 }
 
 export interface User {

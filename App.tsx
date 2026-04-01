@@ -9,9 +9,11 @@ import Transporters from './components/Transporters';
 import Invoices, { InvoiceContent } from './components/Invoices';
 import NewInvoice from './components/NewInvoice';
 import Auth from './components/auth/Auth';
+import Landing from './components/Landing';
 import CompanyManager from './components/CompanyManager';
 import UserProfile from './components/UserProfile';
 import { useLocalStorage } from './hooks/useLocalStorage';
+import { useSupabaseCompanies } from './hooks/useSupabaseCompanies';
 import type { Company, Client, Item, Invoice, Transporter, User, CompanyDetails, BankAccount, RecurringInvoice, RecurringFrequency, DraftInvoice, InvoiceItem, StockHistoryEntry, Quotation } from './types';
 import Modal from './components/common/Modal';
 import Input from './components/common/Input';
@@ -19,6 +21,8 @@ import Button from './components/common/Button';
 import Inventory from './components/Inventory';
 import Quotations from './components/Quotations';
 import CompanyLogo from './components/common/CompanyLogo';
+import { auth } from './firebase';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 
 const simpleHash = (s: string) => {
     let h = 0;
@@ -58,9 +62,9 @@ const App: React.FC = () => {
   const [invoiceFilter, setInvoiceFilter] = useState<string>('');
   const [inventoryFilter, setInventoryFilter] = useState<'all' | 'in' | 'low' | 'out'>('all');
   const [theme, setTheme] = useLocalStorage<'light' | 'dark'>('theme', 'dark');
-  const [users, setUsers] = useLocalStorage<User[]>('invoicepro_users', []);
-  const [companies, setCompanies] = useLocalStorage<Company[]>('invoicepro_companies', []);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [companies, setCompanies, isLoadingCompanies] = useSupabaseCompanies(currentUser?.id);
+  const [isAuthReady, setIsAuthReady] = useState(false);
   const [activeCompanyId, setActiveCompanyId] = useState<string | null>(null);
   const [invoiceToEdit, setInvoiceToEdit] = useState<Invoice | Quotation | null>(null);
   const [isAddCompanyModalOpen, setIsAddCompanyModalOpen] = useState(false);
@@ -71,11 +75,31 @@ const App: React.FC = () => {
   
   // Profile State
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
 
   // Lifted State for New Invoice Draft
   const [draftInvoice, setDraftInvoice] = useState<DraftInvoice>(emptyDraftInvoice);
 
   const searchInputRef = React.useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setCurrentUser({ id: user.uid, email: user.email || '', name: user.displayName || '', passwordHash: '' });
+      } else {
+        setCurrentUser(null);
+      }
+      setIsAuthReady(true);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (currentUser && companies.length > 0 && !activeCompanyId) {
+        const firstCompany = companies.find(c => c.ownerId === currentUser.id);
+        if (firstCompany) setActiveCompanyId(firstCompany.id);
+    }
+  }, [currentUser, companies, activeCompanyId]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -142,54 +166,13 @@ const App: React.FC = () => {
   }, [activeCompany?.id, activeCompany?.details.nextInvoiceNumber, activeView]);
 
   // --- Auth Handlers ---
-  const handleLogin = (email: string, pass: string): boolean => {
-    const user = users.find(u => u.email === email && u.passwordHash === simpleHash(pass));
-    if (user) {
-        setCurrentUser(user);
-        const firstCompany = companies.find(c => c.ownerId === user.id);
-        setActiveCompanyId(firstCompany?.id || null);
-        return true;
-    }
-    return false;
-  };
-  
-  const handleGoogleLogin = () => {
-      const googleEmail = "user@gmail.com";
-      let user = users.find(u => u.email === googleEmail);
-      if (!user) {
-          user = { id: `google_${Date.now()}`, email: googleEmail, passwordHash: 'google-auth', name: 'Google User' };
-          setUsers([...users, user]);
-      }
-      setCurrentUser(user);
-      const firstCompany = companies.find(c => c.ownerId === user!.id);
-      setActiveCompanyId(firstCompany?.id || null);
-  };
-
-  const handleSignup = (email: string, pass: string, name: string): boolean => {
-    if(users.some(u => u.email === email)) return false;
-    const newUser: User = { id: Date.now().toString(), email, name, passwordHash: simpleHash(pass) };
-    setUsers([...users, newUser]);
-    setCurrentUser(newUser);
-    setActiveCompanyId(null);
-    return true;
-  };
-
-  const handleLogout = () => {
+  const handleLogout = async () => {
+      await signOut(auth);
       setCurrentUser(null);
       setActiveCompanyId(null);
   };
   
-  const handleCheckUser = (email: string): boolean => users.some(u => u.email === email);
-
-  const handleResetPassword = (email: string, newPass: string): boolean => {
-      if (!users.some(u => u.email === email)) return false;
-      const updatedUsers = users.map(user => user.email === email ? { ...user, passwordHash: simpleHash(newPass) } : user);
-      setUsers(updatedUsers);
-      return true;
-  };
-
   const handleUpdateProfile = (updatedUser: User) => {
-      setUsers(users.map(u => u.id === updatedUser.id ? updatedUser : u));
       setCurrentUser(updatedUser);
   };
 
@@ -608,8 +591,15 @@ const App: React.FC = () => {
       setActiveView('NewInvoice');
   };
 
+  if (!isAuthReady || isLoadingCompanies) {
+    return <div className="w-full h-screen bg-slate-100 dark:bg-secondary-dark flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-accent"></div></div>;
+  }
+
   if (!currentUser) {
-    return <div className="w-full h-screen bg-slate-100 dark:bg-secondary-dark flex items-center justify-center"><Auth onLogin={handleLogin} onSignup={handleSignup} onGoogleLogin={handleGoogleLogin} onCheckUserExists={handleCheckUser} onResetPassword={handleResetPassword} /></div>;
+    if (showAuth) {
+      return <div className="w-full h-screen bg-slate-100 dark:bg-secondary-dark flex items-center justify-center"><Auth onBack={() => setShowAuth(false)} /></div>;
+    }
+    return <Landing onGetStarted={() => setShowAuth(true)} />;
   }
 
   if (!activeCompany) {

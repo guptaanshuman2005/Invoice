@@ -51,24 +51,46 @@ const CompanyManager: React.FC<CompanyManagerProps> = ({ onAddCompany, onLogout 
         }
     }, [validateField]);
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'signature') => {
+    const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+    const [isUploadingSignature, setIsUploadingSignature] = useState(false);
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'signature') => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
             if (!file.type.startsWith('image/')) return;
             if (file.size > 2 * 1024 * 1024) return; // 2MB limit
 
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                const result = reader.result as string;
-                if (type === 'logo') {
-                    setLogoPreview(result);
-                    setDetails(prev => ({ ...prev, logo: result }));
+            const isLogo = type === 'logo';
+            const setUploading = isLogo ? setIsUploadingLogo : setIsUploadingSignature;
+            const setPreview = isLogo ? setLogoPreview : setSignaturePreview;
+            
+            setUploading(true);
+            try {
+                // Show local preview immediately
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    setPreview(reader.result as string);
+                };
+                reader.readAsDataURL(file);
+
+                // Upload to Supabase
+                const { uploadFileToSupabase } = await import('../utils/supabaseStorage');
+                const path = `${type}s/temp_${Date.now()}_${file.name}`;
+                const publicUrl = await uploadFileToSupabase(file, 'company-assets', path);
+                
+                if (publicUrl) {
+                    setDetails(prev => ({ ...prev, [type]: publicUrl }));
                 } else {
-                    setSignaturePreview(result);
-                    setDetails(prev => ({ ...prev, signature: result }));
+                    setLogoError(`Failed to upload ${type}.`);
+                    setPreview(null); // Revert preview
                 }
-            };
-            reader.readAsDataURL(file);
+            } catch (err) {
+                console.error(`Error uploading ${type}:`, err);
+                setLogoError('An unexpected error occurred.');
+                setPreview(null); // Revert preview
+            } finally {
+                setUploading(false);
+            }
         }
     };
 
@@ -184,7 +206,9 @@ const CompanyManager: React.FC<CompanyManagerProps> = ({ onAddCompany, onLogout 
                                 <div className="flex-shrink-0">
                                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Company Logo</label>
                                     <div className="relative group w-32 h-32 bg-white dark:bg-slate-800 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center overflow-hidden hover:border-accent hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-all cursor-pointer">
-                                        {logoPreview ? (
+                                        {isUploadingLogo ? (
+                                            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-accent"></div>
+                                        ) : logoPreview ? (
                                             <img src={logoPreview} alt="Logo" className="w-full h-full object-contain p-2" />
                                         ) : (
                                             <div className="text-center p-4">
@@ -192,7 +216,7 @@ const CompanyManager: React.FC<CompanyManagerProps> = ({ onAddCompany, onLogout 
                                                 <span className="text-xs text-slate-500 font-medium">Upload Logo</span>
                                             </div>
                                         )}
-                                        <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleFileChange(e, 'logo')} accept="image/*" />
+                                        <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleFileChange(e, 'logo')} accept="image/*" disabled={isUploadingLogo} />
                                     </div>
                                 </div>
                                 <div className="flex-grow pt-8">
@@ -248,7 +272,9 @@ const CompanyManager: React.FC<CompanyManagerProps> = ({ onAddCompany, onLogout 
                                     <div>
                                         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Authorized Signature</label>
                                         <div className="relative group w-full h-32 bg-white dark:bg-slate-800 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 flex items-center justify-center overflow-hidden hover:border-accent hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-all cursor-pointer">
-                                            {signaturePreview ? (
+                                            {isUploadingSignature ? (
+                                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-accent"></div>
+                                            ) : signaturePreview ? (
                                                 <img src={signaturePreview} alt="Signature" className="w-full h-full object-contain p-2" />
                                             ) : (
                                                 <div className="text-center p-4">
@@ -256,7 +282,7 @@ const CompanyManager: React.FC<CompanyManagerProps> = ({ onAddCompany, onLogout 
                                                     <p className="text-[10px] text-slate-400 mt-1">For digital invoices</p>
                                                 </div>
                                             )}
-                                            <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleFileChange(e, 'signature')} accept="image/*" />
+                                            <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleFileChange(e, 'signature')} accept="image/*" disabled={isUploadingSignature} />
                                         </div>
                                     </div>
                                 </div>

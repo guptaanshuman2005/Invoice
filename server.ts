@@ -62,7 +62,10 @@ async function startServer() {
       let amount = 0;
       if (plan === "basic") amount = 199;
       else if (plan === "standard") amount = 499;
-      else if (plan === "premium") amount = 999;
+      else if (plan === "premium") amount = 1499;
+      else if (plan === "addon_50") amount = 99;
+      else if (plan === "addon_200") amount = 299;
+      else if (plan === "addon_500") amount = 499;
 
       if (amount === 0) {
         return res.status(400).json({ error: "Invalid plan" });
@@ -121,7 +124,7 @@ async function startServer() {
     if (event.type === 'PAYMENT_SUCCESS_WEBHOOK') {
       const orderTags = event.data?.order?.order_tags;
       const companyId = orderTags?.companyId;
-      const plan = orderTags?.plan as 'basic' | 'standard' | 'premium';
+      const plan = orderTags?.plan as string;
       
       if (companyId && plan) {
         // Fetch the current company data
@@ -135,17 +138,37 @@ async function startServer() {
           console.error('Error fetching company:', fetchError);
         } else if (companyData) {
           const company = companyData.data;
-          const invoiceLimit = plan === 'basic' ? 100 : plan === 'standard' ? 300 : 1000;
-          const currentPeriodEnd = new Date();
-          currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1);
+          
+          if (plan.startsWith('addon_')) {
+             const extraInvoices = parseInt(plan.split('_')[1]);
+             if (!company.subscription) {
+                 company.subscription = {
+                     plan: 'free',
+                     status: 'active',
+                     currentPeriodEnd: new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString(),
+                     invoiceCount: 0,
+                     invoiceLimit: 10,
+                     addonInvoices: extraInvoices
+                 };
+             } else {
+                 company.subscription.addonInvoices = (company.subscription.addonInvoices || 0) + extraInvoices;
+             }
+          } else {
+              const invoiceLimit = plan === 'basic' ? 50 : plan === 'standard' ? 100 : 300;
+              const currentPeriodEnd = new Date();
+              if (plan === 'basic') currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1);
+              else if (plan === 'standard') currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 3);
+              else if (plan === 'premium') currentPeriodEnd.setFullYear(currentPeriodEnd.getFullYear() + 1);
 
-          company.subscription = {
-            plan,
-            status: 'active',
-            currentPeriodEnd: currentPeriodEnd.toISOString(),
-            invoiceCount: 0,
-            invoiceLimit,
-          };
+              company.subscription = {
+                plan,
+                status: 'active',
+                currentPeriodEnd: currentPeriodEnd.toISOString(),
+                invoiceCount: 0,
+                invoiceLimit,
+                addonInvoices: company.subscription?.addonInvoices || 0,
+              };
+          }
 
           const { error: updateError } = await supabase
             .from('companies')

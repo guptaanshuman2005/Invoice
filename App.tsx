@@ -22,8 +22,7 @@ import Button from './components/common/Button';
 import Inventory from './components/Inventory';
 import Quotations from './components/Quotations';
 import CompanyLogo from './components/common/CompanyLogo';
-import { auth } from './firebase';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { supabase } from './supabase';
 
 const simpleHash = (s: string) => {
     let h = 0;
@@ -98,15 +97,35 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setCurrentUser({ id: user.uid, email: user.email || '', name: user.displayName || '', passwordHash: '' });
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setCurrentUser({ 
+          id: session.user.id, 
+          email: session.user.email || '', 
+          name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || '', 
+          passwordHash: '' 
+        });
       } else {
         setCurrentUser(null);
       }
       setIsAuthReady(true);
     });
-    return () => unsubscribe();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setCurrentUser({ 
+          id: session.user.id, 
+          email: session.user.email || '', 
+          name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || '', 
+          passwordHash: '' 
+        });
+      } else {
+        setCurrentUser(null);
+      }
+      setIsAuthReady(true);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -182,7 +201,7 @@ const App: React.FC = () => {
 
   // --- Auth Handlers ---
   const handleLogout = async () => {
-      await signOut(auth);
+      await supabase.auth.signOut();
       setCurrentUser(null);
       setActiveCompanyId(null);
   };
@@ -192,15 +211,6 @@ const App: React.FC = () => {
   };
 
   const handleSetActiveView = (view: string) => {
-    if (view === 'NewInvoice' || view === 'NewQuotation') {
-      const sub = activeCompany?.subscription;
-      const isFree = !sub || sub.plan === 'free';
-      // If user is free or subscription is not active, prompt to pay
-      if (isFree || sub?.status !== 'active') {
-        setIsSubscriptionPromptOpen(true);
-        return;
-      }
-    }
     setActiveView(view);
   };
 
@@ -466,11 +476,25 @@ const App: React.FC = () => {
             updatedInvoices = updatedInvoices.map(inv => inv.id === updatedInvoice.id ? updatedInvoice : inv);
         } else {
             // Create Mode
+            const currentMonth = new Date().getMonth();
+            const currentYear = new Date().getFullYear();
+            const invoicesThisMonth = activeCompany.invoices.filter(inv => {
+                const d = new Date(inv.issueDate);
+                return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+            }).length;
+
             const sub = activeCompany.subscription;
-            if (!sub || sub.status !== 'active' || sub.invoiceCount >= sub.invoiceLimit) {
-                alert('You have reached your invoice limit. Please upgrade your plan.');
-                setIsSubscriptionPromptOpen(true);
-                return;
+            const monthlyLimit = (!sub || sub.plan === 'free') ? 10 : sub.invoiceLimit;
+            let newAddonInvoices = sub?.addonInvoices || 0;
+
+            if (invoicesThisMonth >= monthlyLimit) {
+                if (newAddonInvoices > 0) {
+                    newAddonInvoices -= 1;
+                } else {
+                    alert('You have reached your invoice limit for this month. Please purchase an add-on or upgrade your plan.');
+                    setIsSubscriptionPromptOpen(true);
+                    return;
+                }
             }
 
             const newInvoiceData = invoiceData as Omit<Invoice, 'id' | 'status'>;
@@ -501,8 +525,31 @@ const App: React.FC = () => {
         
         const updatedSubscription = activeCompany.subscription ? {
             ...activeCompany.subscription,
-            invoiceCount: ('id' in invoiceData) ? activeCompany.subscription.invoiceCount : (activeCompany.subscription.invoiceCount || 0) + 1
-        } : undefined;
+            invoiceCount: ('id' in invoiceData) ? activeCompany.subscription.invoiceCount : (activeCompany.subscription.invoiceCount || 0) + 1,
+            addonInvoices: ('id' in invoiceData) ? activeCompany.subscription.addonInvoices : (activeCompany.subscription.addonInvoices || 0)
+        } : {
+            plan: 'free' as const,
+            status: 'active' as const,
+            currentPeriodEnd: new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString(),
+            invoiceCount: ('id' in invoiceData) ? 0 : 1,
+            invoiceLimit: 10,
+            addonInvoices: 0
+        };
+
+        // If we consumed an add-on, update it
+        if (!('id' in invoiceData)) {
+            const currentMonth = new Date().getMonth();
+            const currentYear = new Date().getFullYear();
+            const invoicesThisMonth = activeCompany.invoices.filter(inv => {
+                const d = new Date(inv.issueDate);
+                return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+            }).length;
+            const monthlyLimit = (!activeCompany.subscription || activeCompany.subscription.plan === 'free') ? 10 : activeCompany.subscription.invoiceLimit;
+            
+            if (invoicesThisMonth >= monthlyLimit && updatedSubscription.addonInvoices && updatedSubscription.addonInvoices > 0) {
+                updatedSubscription.addonInvoices -= 1;
+            }
+        }
 
         handleUpdateCompany({ 
             ...activeCompany, 

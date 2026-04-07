@@ -111,14 +111,6 @@ const Sidebar: React.FC<SidebarProps> = ({
         {/* Footer Actions */}
         <div className={`p-4 border-t border-slate-200 dark:border-slate-800 space-y-2 bg-slate-50/50 dark:bg-slate-900/50 ${isCollapsed ? 'flex flex-col items-center' : ''}`}>
           <button
-            onClick={onOpenProfile}
-            title={isCollapsed ? currentUser?.name || 'Profile' : ''}
-            className={`w-full flex items-center gap-3 p-3 rounded-2xl text-sm font-bold text-slate-600 hover:bg-white dark:text-slate-400 dark:hover:bg-slate-800 hover:shadow-sm transition-all border border-transparent hover:border-slate-200 dark:hover:border-slate-700 hover:-translate-y-0.5 ${isCollapsed ? 'justify-center px-0' : ''}`}
-          >
-            <UserIcon className="w-5 h-5 shrink-0" />
-            {!isCollapsed && <span className="truncate animate-fade-in">{currentUser?.name || 'Profile'}</span>}
-          </button>
-          <button
             onClick={toggleTheme}
             title={isCollapsed ? (theme === 'dark' ? 'Light Mode' : 'Dark Mode') : ''}
             className={`w-full flex items-center gap-3 p-3 rounded-2xl text-sm font-bold text-slate-600 hover:bg-white dark:text-slate-400 dark:hover:bg-slate-800 hover:shadow-sm transition-all border border-transparent hover:border-slate-200 dark:hover:border-slate-700 hover:-translate-y-0.5 ${isCollapsed ? 'justify-center px-0' : ''}`}

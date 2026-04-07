@@ -1,4 +1,4 @@
--- Supabase Schema for InvoicePro (Using Firebase Auth)
+-- Supabase Schema for InvoicePro (Using Supabase Auth)
 
 -- 1. Create the 'companies' table
 CREATE TABLE IF NOT EXISTS public.companies (
@@ -13,13 +13,15 @@ CREATE TABLE IF NOT EXISTS public.companies (
 ALTER TABLE public.companies ENABLE ROW LEVEL SECURITY;
 
 -- 3. Create RLS Policies for 'companies'
--- Since we are using Firebase for Auth, Supabase sees requests as 'anon'.
--- For a production app, you should configure Supabase to verify Firebase JWTs.
--- For now, we allow anon access but filter by owner_id in the application code.
-
-CREATE POLICY "Allow all operations for anon (Firebase Auth handles security)" 
+-- This policy ensures that users can only read, update, and delete their own companies.
+CREATE POLICY "Users can only access their own companies" 
 ON public.companies FOR ALL 
-USING (true) WITH CHECK (true);
+USING (
+  owner_id = auth.uid()::text
+) 
+WITH CHECK (
+  owner_id = auth.uid()::text
+);
 
 -- 4. Create the 'company-assets' storage bucket
 INSERT INTO storage.buckets (id, name, public) 
@@ -27,6 +29,6 @@ VALUES ('company-assets', 'company-assets', true)
 ON CONFLICT (id) DO NOTHING;
 
 -- 5. Enable RLS on the 'company-assets' bucket
-CREATE POLICY "Allow all operations for anon on company-assets" 
+CREATE POLICY "Allow all operations for authenticated users on company-assets" 
 ON storage.objects FOR ALL 
 USING (bucket_id = 'company-assets') WITH CHECK (bucket_id = 'company-assets');

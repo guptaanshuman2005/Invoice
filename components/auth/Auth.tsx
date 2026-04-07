@@ -4,8 +4,7 @@ import Input from '../common/Input';
 import Button from '../common/Button';
 import { validateEmail, validateRequired, validatePasswordStrength } from '../../utils/validation';
 import { Zap, Check } from 'lucide-react';
-import { auth } from '../../firebase';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, sendPasswordResetEmail, updateProfile } from 'firebase/auth';
+import { supabase } from '../../supabase';
 
 type AuthView = 'login' | 'signup' | 'forgotPassword' | 'resetSuccess';
 
@@ -66,9 +65,12 @@ const Auth: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
         const isPasswordValid = validateAndSetField('password', password);
         if (!isEmailValid || !isPasswordValid) return;
 
-        try {
-            await signInWithEmailAndPassword(auth, email, password);
-        } catch (error: any) {
+        const { error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+        });
+
+        if (error) {
             setFormError(error.message || 'Invalid email or password.');
         }
     };
@@ -81,19 +83,30 @@ const Auth: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
         const isPasswordValid = validateAndSetField('password', password, true);
         if (!isNameValid || !isEmailValid || !isPasswordValid) return;
 
-        try {
-            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-            await updateProfile(userCredential.user, { displayName: name });
-        } catch (error: any) {
+        const { error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+                data: {
+                    full_name: name,
+                }
+            }
+        });
+
+        if (error) {
             setFormError(error.message || 'Could not sign up. The email might already be in use.');
         }
     };
     
     const handleGoogleLogin = async () => {
-        try {
-            const provider = new GoogleAuthProvider();
-            await signInWithPopup(auth, provider);
-        } catch (error: any) {
+        const { error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: window.location.origin
+            }
+        });
+
+        if (error) {
             setFormError(error.message || 'Google login failed.');
         }
     };
@@ -104,11 +117,14 @@ const Auth: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
         const isEmailValid = validateAndSetField('email', email);
         if(!isEmailValid) return;
 
-        try {
-            await sendPasswordResetEmail(auth, email);
-            switchView('resetSuccess');
-        } catch (error: any) {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: `${window.location.origin}/reset-password`,
+        });
+
+        if (error) {
             setFormError(error.message || "Failed to send reset email.");
+        } else {
+            switchView('resetSuccess');
         }
     };
 

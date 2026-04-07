@@ -127,11 +127,12 @@ export interface StockHistoryEntry {
 }
 
 export interface Subscription {
-  plan: 'free' | 'monthly' | 'quarterly' | 'yearly';
+  plan: 'free' | 'basic' | 'standard' | 'premium';
   status: 'active' | 'past_due' | 'canceled' | 'incomplete';
   currentPeriodEnd: string;
   invoiceCount: number;
   invoiceLimit: number;
+  addonInvoices?: number;
 }
 
 export interface Company {

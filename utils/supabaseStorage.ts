@@ -6,9 +6,17 @@ export const uploadFileToSupabase = async (
   path: string
 ): Promise<string | null> => {
   try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      console.error('User not authenticated');
+      return null;
+    }
+    const userId = session.user.id;
+    const securePath = `${userId}/${path}`;
+
     const { data, error } = await supabase.storage
       .from(bucket)
-      .upload(path, file, {
+      .upload(securePath, file, {
         cacheControl: '3600',
         upsert: true,
       });
@@ -20,7 +28,7 @@ export const uploadFileToSupabase = async (
 
     const { data: publicUrlData } = supabase.storage
       .from(bucket)
-      .getPublicUrl(path);
+      .getPublicUrl(securePath);
 
     return publicUrlData.publicUrl;
   } catch (err) {

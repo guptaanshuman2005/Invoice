@@ -7,6 +7,7 @@ import Modal from './common/Modal';
 import { INDIAN_STATES } from '../constants';
 import { validateGstin, validatePan, validateEmail, validateIfsc, validateRequired, fetchLocationByPincode } from '../utils/validation';
 import { Building, Image as ImageIcon } from 'lucide-react';
+import { trackEvent } from '../utils/analytics';
 
 interface SettingsProps {
   activeCompany: Company;
@@ -269,6 +270,7 @@ const Settings: React.FC<SettingsProps> = ({ activeCompany, updateCompany }) => 
     setSaveError(null);
     updateCompany({ ...activeCompany, details });
     setShowSuccess(true);
+    trackEvent('update_company_settings', { companyId: activeCompany.id });
     setTimeout(() => setShowSuccess(false), 3000);
   };
   
@@ -418,6 +420,22 @@ const Settings: React.FC<SettingsProps> = ({ activeCompany, updateCompany }) => 
                             </div>
                             <p className="text-xs text-slate-400 mt-1">This color will be used for buttons, links, and invoice headers.</p>
                         </div>
+                        <div>
+                            <label className="block text-xs font-semibold uppercase text-slate-500 mb-2">Invoice Template</label>
+                            <select 
+                                name="invoiceTemplate" 
+                                value={details.invoiceTemplate || 'modern'} 
+                                onChange={handleChange} 
+                                className={inputClasses}
+                            >
+                                <option value="modern">Modern (Default)</option>
+                                <option value="traditional">Traditional (B&W, Ink Saver)</option>
+                                <option value="premium" disabled={activeCompany.subscription?.plan !== 'premium'}>Premium (Customizable - Premium Plan Only)</option>
+                            </select>
+                            {activeCompany.subscription?.plan !== 'premium' && (
+                                <p className="text-xs text-amber-500 mt-1">Upgrade to Premium to unlock the customizable Premium template.</p>
+                            )}
+                        </div>
                     </div>
                 </div>
                 
@@ -453,15 +471,66 @@ const Settings: React.FC<SettingsProps> = ({ activeCompany, updateCompany }) => 
                     <Input label="PAN" name="pan" value={details.pan} onChange={handleChange} error={detailErrors.pan} placeholder="e.g. ABCDE1234F" />
                     <Input label="UDYAM" name="udyam" value={details.udyam} onChange={handleChange} placeholder="Optional" />
                 </div>
-                <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-4">
-                    {saveError && <span className="text-sm font-semibold text-red-500 animate-fade-in">{saveError}</span>}
-                    <Button onClick={handleSaveDetails} className="px-8 !py-3 !text-base shadow-lg shadow-accent/20">Save Changes</Button>
+                <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                        <a href="/privacy" onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('navigate', { detail: 'PrivacyPolicy' })); }} className="text-sm text-slate-500 hover:text-accent transition-colors">Privacy Policy</a>
+                        <a href="/terms" onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('navigate', { detail: 'TermsOfService' })); }} className="text-sm text-slate-500 hover:text-accent transition-colors">Terms of Service</a>
+                    </div>
+                    <div className="flex items-center gap-4">
+                        {saveError && <span className="text-sm font-semibold text-red-500 animate-fade-in">{saveError}</span>}
+                        <Button onClick={handleSaveDetails} className="px-8 !py-3 !text-base shadow-lg shadow-accent/20">Save Changes</Button>
+                    </div>
                 </div>
             </div>
         </div>
 
-        {/* Right Column - Bank Accounts */}
-        <div className="lg:col-span-1">
+        {/* Right Column - Bank Accounts & Subscription */}
+        <div className="lg:col-span-1 space-y-8">
+            {/* Subscription Card */}
+            <div className="glass-panel p-6 rounded-2xl">
+                <h2 className="text-lg font-bold text-slate-900 dark:text-light-text mb-4">Subscription</h2>
+                <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                    <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Current Plan</span>
+                        <span className="text-xs font-bold uppercase tracking-wider bg-accent text-white px-2 py-0.5 rounded-full">
+                            {activeCompany.subscription?.plan || 'Free'}
+                        </span>
+                    </div>
+                    {activeCompany.subscription && activeCompany.subscription.plan !== 'free' && (
+                        <>
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="text-sm text-slate-600 dark:text-slate-400">Status</span>
+                                <span className={`text-sm font-semibold ${activeCompany.subscription.status === 'active' ? 'text-green-600' : 'text-amber-600'}`}>
+                                    {activeCompany.subscription.status.charAt(0).toUpperCase() + activeCompany.subscription.status.slice(1)}
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-center mb-4">
+                                <span className="text-sm text-slate-600 dark:text-slate-400">Renews On</span>
+                                <span className="text-sm font-medium text-slate-900 dark:text-white">
+                                    {new Date(activeCompany.subscription.currentPeriodEnd).toLocaleDateString()}
+                                </span>
+                            </div>
+                        </>
+                    )}
+                    <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 space-y-2">
+                        <Button className="w-full text-xs" onClick={() => window.dispatchEvent(new CustomEvent('openSubscriptionPrompt'))}>
+                            Upgrade / Buy Add-ons
+                        </Button>
+                        {activeCompany.subscription && activeCompany.subscription.plan !== 'free' && (
+                            <Button variant="secondary" className="w-full text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => {
+                                if (window.confirm('Are you sure you want to cancel your subscription? You will lose access to premium features at the end of your billing cycle.')) {
+                                    // In a real app, this would call an API to cancel the subscription
+                                    alert('Subscription cancellation requested. Please contact support to finalize.');
+                                    trackEvent('cancel_subscription_requested', { companyId: activeCompany.id });
+                                }
+                            }}>
+                                Cancel Subscription
+                            </Button>
+                        )}
+                    </div>
+                </div>
+            </div>
+
             <div className="glass-panel p-6 rounded-2xl sticky top-6">
                 <div className="flex justify-between items-center mb-6">
                     <h2 className="text-lg font-bold text-slate-900 dark:text-light-text">Bank Accounts</h2>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Menu, Search, User as UserIcon, ChevronDown, Check } from 'lucide-react';
+import { Menu, Search, User as UserIcon, ChevronDown, Check, MessageSquare } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import Settings from './components/Settings';
@@ -13,6 +13,9 @@ import Landing from './components/Landing';
 import CompanyManager from './components/CompanyManager';
 import UserProfile from './components/UserProfile';
 import SubscriptionPrompt from './components/SubscriptionPrompt';
+import PrivacyPolicy from './components/PrivacyPolicy';
+import TermsOfService from './components/TermsOfService';
+import FeedbackModal from './components/FeedbackModal';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useSupabaseCompanies } from './hooks/useSupabaseCompanies';
 import type { Company, Client, Item, Invoice, Transporter, User, CompanyDetails, BankAccount, RecurringInvoice, RecurringFrequency, DraftInvoice, InvoiceItem, StockHistoryEntry, Quotation } from './types';
@@ -23,6 +26,7 @@ import Inventory from './components/Inventory';
 import Quotations from './components/Quotations';
 import CompanyLogo from './components/common/CompanyLogo';
 import { supabase } from './supabase';
+import { trackPageView, trackEvent } from './utils/analytics';
 
 const simpleHash = (s: string) => {
     let h = 0;
@@ -73,6 +77,7 @@ const App: React.FC = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isCompanySwitcherOpen, setIsCompanySwitcherOpen] = useState(false);
   const [isSubscriptionPromptOpen, setIsSubscriptionPromptOpen] = useState(false);
+  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   
   // Profile State
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -82,6 +87,10 @@ const App: React.FC = () => {
   const [draftInvoice, setDraftInvoice] = useState<DraftInvoice>(emptyDraftInvoice);
 
   const searchInputRef = React.useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    trackPageView(activeView);
+  }, [activeView]);
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -136,6 +145,12 @@ const App: React.FC = () => {
   }, [currentUser, companies, activeCompanyId]);
 
   useEffect(() => {
+    const handleOpenSubscription = () => setIsSubscriptionPromptOpen(true);
+    window.addEventListener('openSubscriptionPrompt', handleOpenSubscription);
+    return () => window.removeEventListener('openSubscriptionPrompt', handleOpenSubscription);
+  }, []);
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.altKey && (e.key.toLowerCase() === 's' || e.code === 'KeyS')) {
         e.preventDefault();
@@ -144,6 +159,17 @@ const App: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  useEffect(() => {
+    const handleNavigate = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      if (customEvent.detail) {
+        handleSetActiveView(customEvent.detail);
+      }
+    };
+    window.addEventListener('navigate', handleNavigate);
+    return () => window.removeEventListener('navigate', handleNavigate);
   }, []);
 
   useEffect(() => {
@@ -226,6 +252,7 @@ const App: React.FC = () => {
       setCompanies([...companies, newCompany]);
       setActiveCompanyId(newCompany.id);
       setActiveView('Dashboard');
+      trackEvent('create_company', { companyId: newCompany.id });
   };
 
   const handleCreateNewCompany = () => {
@@ -422,6 +449,7 @@ const App: React.FC = () => {
             if ('id' in quotationData) {
                 // Update existing quote
                 updatedQuotations = updatedQuotations.map(q => q.id === quotationData.id ? { ...q, ...quotationData } as Quotation : q);
+                trackEvent('update_quotation', { quotationId: quotationData.id });
             } else {
                 // New Quote
                 const newQuote: Quotation = { 
@@ -474,6 +502,7 @@ const App: React.FC = () => {
                 }
             });
             updatedInvoices = updatedInvoices.map(inv => inv.id === updatedInvoice.id ? updatedInvoice : inv);
+            trackEvent('update_invoice', { invoiceId: updatedInvoice.id });
         } else {
             // Create Mode
             const currentMonth = new Date().getMonth();
@@ -521,6 +550,7 @@ const App: React.FC = () => {
             const newInvoice: Invoice = { ...newInvoiceData, id: `inv_${Date.now()}`, status: 'Unpaid' };
             updatedInvoices.push(newInvoice);
             if (newInvoiceData.invoiceNumber === expectedInvoiceNumber) updatedDetails.nextInvoiceNumber = nextNumber + 1;
+            trackEvent('create_invoice', { invoiceId: newInvoice.id });
         }
         
         const updatedSubscription = activeCompany.subscription ? {
@@ -684,10 +714,20 @@ const App: React.FC = () => {
   }
 
   if (!currentUser) {
+    if (activeView === 'PrivacyPolicy') {
+      return <PrivacyPolicy onBack={() => handleSetActiveView('Dashboard')} />;
+    }
+    if (activeView === 'TermsOfService') {
+      return <TermsOfService onBack={() => handleSetActiveView('Dashboard')} />;
+    }
     if (showAuth) {
       return <Auth onBack={() => setShowAuth(false)} />;
     }
-    return <Landing onGetStarted={() => setShowAuth(true)} />;
+    return <Landing 
+      onGetStarted={() => setShowAuth(true)} 
+      onNavigateToPrivacy={() => handleSetActiveView('PrivacyPolicy')}
+      onNavigateToTerms={() => handleSetActiveView('TermsOfService')}
+    />;
   }
 
   if (!activeCompany) {
@@ -718,6 +758,8 @@ const App: React.FC = () => {
       case 'Inventory': return <Inventory items={activeCompany.items} setItems={setItems} onBulkStockUpdate={handleBulkStockUpdate} stockHistory={activeCompany.stockHistory || []} initialFilter={inventoryFilter} />;
       case 'Transporters': return <Transporters transporters={activeCompany.transporters} setTransporters={setTransporters} />;
       case 'Settings': return <Settings activeCompany={activeCompany} updateCompany={handleUpdateCompany} />;
+      case 'PrivacyPolicy': return <PrivacyPolicy onBack={() => handleSetActiveView('Dashboard')} />;
+      case 'TermsOfService': return <TermsOfService onBack={() => handleSetActiveView('Dashboard')} />;
       default: return (
         <Dashboard 
           invoices={activeCompany.invoices} 
@@ -830,6 +872,9 @@ const App: React.FC = () => {
                                 </div>
                             )}
                         </div>
+                        <button onClick={() => setIsFeedbackModalOpen(true)} title="Help & Feedback" className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 flex items-center justify-center hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-all shadow-sm">
+                            <MessageSquare className="w-5 h-5" />
+                        </button>
                         <button onClick={() => setIsProfileOpen(true)} className="w-10 h-10 rounded-2xl bg-accent/10 text-accent flex items-center justify-center hover:bg-accent hover:text-white transition-all shadow-sm">
                             <UserIcon className="w-5 h-5" />
                         </button>
@@ -855,16 +900,28 @@ const App: React.FC = () => {
             {currentUser && <UserProfile user={currentUser} onUpdateProfile={handleUpdateProfile} onClose={() => setIsProfileOpen(false)} />}
         </Modal>
 
+        {currentUser && (
+          <FeedbackModal 
+            isOpen={isFeedbackModalOpen} 
+            onClose={() => setIsFeedbackModalOpen(false)} 
+            userId={currentUser.id} 
+          />
+        )}
+
         <SubscriptionPrompt 
           isOpen={isSubscriptionPromptOpen} 
           onClose={() => setIsSubscriptionPromptOpen(false)} 
           onSubscribe={async (plan) => {
             if (!activeCompany) return;
             try {
+              const { data: { session } } = await supabase.auth.getSession();
+              if (!session) throw new Error("Not authenticated");
+
               const response = await fetch('/api/create-cashfree-order', {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${session.access_token}`
                 },
                 body: JSON.stringify({
                   plan,

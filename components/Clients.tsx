@@ -9,6 +9,7 @@ import { InvoiceView } from './Invoices';
 import { validateEmail, validateRequired, validateGstin, fetchLocationByPincode } from '../utils/validation';
 import { arrayToCSV, downloadCSV } from '../utils/csvExport';
 import { Clock, IndianRupee, CheckCircle, FileText, Eye, Edit, Mail, Trash2, AlertCircle, Search, Plus, Download, Upload, X } from 'lucide-react';
+import { trackEvent } from '../utils/analytics';
 
 interface ClientsProps {
   clients: Client[];
@@ -497,8 +498,11 @@ const Clients: React.FC<ClientsProps> = ({ clients, setClients, invoices, compan
       
       if (editingClient.id) {
           setClients(clients.map(c => c.id === editingClient.id ? editingClient : c));
+          trackEvent('update_client', { clientId: editingClient.id });
       } else {
-          setClients([...clients, { ...editingClient, id: Date.now().toString() }]);
+          const newId = Date.now().toString();
+          setClients([...clients, { ...editingClient, id: newId }]);
+          trackEvent('create_client', { clientId: newId });
       }
       setIsModalOpen(false);
   };

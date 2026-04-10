@@ -5,6 +5,7 @@ import Button from '../common/Button';
 import { validateEmail, validateRequired, validatePasswordStrength } from '../../utils/validation';
 import { Zap, Check } from 'lucide-react';
 import { supabase } from '../../supabase';
+import { trackEvent } from '../../utils/analytics';
 
 type AuthView = 'login' | 'signup' | 'forgotPassword' | 'resetSuccess';
 
@@ -65,13 +66,15 @@ const Auth: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
         const isPasswordValid = validateAndSetField('password', password);
         if (!isEmailValid || !isPasswordValid) return;
 
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
             email,
             password,
         });
 
         if (error) {
             setFormError(error.message || 'Invalid email or password.');
+        } else if (data.user) {
+            trackEvent('user_login', { userId: data.user.id, method: 'password' });
         }
     };
     
@@ -83,7 +86,7 @@ const Auth: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
         const isPasswordValid = validateAndSetField('password', password, true);
         if (!isNameValid || !isEmailValid || !isPasswordValid) return;
 
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
             email,
             password,
             options: {
@@ -95,11 +98,13 @@ const Auth: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
 
         if (error) {
             setFormError(error.message || 'Could not sign up. The email might already be in use.');
+        } else if (data.user) {
+            trackEvent('user_signup', { userId: data.user.id, method: 'password' });
         }
     };
     
     const handleGoogleLogin = async () => {
-        const { error } = await supabase.auth.signInWithOAuth({
+        const { data, error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {
                 redirectTo: window.location.origin
@@ -108,6 +113,8 @@ const Auth: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
 
         if (error) {
             setFormError(error.message || 'Google login failed.');
+        } else {
+            trackEvent('user_login_attempt', { method: 'google' });
         }
     };
 

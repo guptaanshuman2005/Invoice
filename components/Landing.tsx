@@ -3,9 +3,11 @@ import { Zap, CheckCircle2, ArrowRight, Shield, BarChart3, Mail, CreditCard } fr
 
 interface LandingProps {
   onGetStarted: () => void;
+  onNavigateToPrivacy?: () => void;
+  onNavigateToTerms?: () => void;
 }
 
-const Landing: React.FC<LandingProps> = ({ onGetStarted }) => {
+const Landing: React.FC<LandingProps> = ({ onGetStarted, onNavigateToPrivacy, onNavigateToTerms }) => {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 font-sans selection:bg-accent selection:text-white">
       {/* Navbar */}
@@ -199,6 +201,10 @@ const Landing: React.FC<LandingProps> = ({ onGetStarted }) => {
           <div className="flex items-center gap-2">
             <Zap className="w-5 h-5 text-accent" />
             <span className="font-bold text-slate-900 dark:text-white">InvoicePro</span>
+          </div>
+          <div className="flex items-center gap-6">
+            <button onClick={onNavigateToPrivacy} className="text-sm text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors">Privacy Policy</button>
+            <button onClick={onNavigateToTerms} className="text-sm text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors">Terms of Service</button>
           </div>
           <p className="text-slate-500 text-sm">© {new Date().getFullYear()} InvoicePro. All rights reserved.</p>
         </div>

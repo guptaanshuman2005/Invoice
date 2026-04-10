@@ -18,7 +18,7 @@ const CompanyManager: React.FC<CompanyManagerProps> = ({ onAddCompany, onLogout 
     const [details, setDetails] = useState<CompanyDetails>({
         name: '', gstin: '', pan: '', phone: '', email: '', website: '',
         address: '', city: '', state: '', zip: '', udyam: '', logo: '', signature: '',
-        invoicePrefix: 'INV-', nextInvoiceNumber: 1
+        invoicePrefix: 'INV-', nextInvoiceNumber: 1, invoiceTemplate: 'modern'
     });
     const [logoPreview, setLogoPreview] = useState<string | null>(null);
     const [signaturePreview, setSignaturePreview] = useState<string | null>(null);
@@ -266,6 +266,20 @@ const CompanyManager: React.FC<CompanyManagerProps> = ({ onAddCompany, onLogout 
                                         <Input label="PAN" name="pan" value={details.pan} onChange={handleChange} error={errors.pan} placeholder="e.g. ABCDE1234F" />
                                         <div className="mt-4">
                                             <Input label="UDYAM Registration" name="udyam" value={details.udyam} onChange={handleChange} placeholder="Optional" />
+                                        </div>
+                                        <div className="mt-4">
+                                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Invoice Template</label>
+                                            <select 
+                                                name="invoiceTemplate" 
+                                                value={details.invoiceTemplate || 'modern'} 
+                                                onChange={handleChange} 
+                                                className={inputClasses}
+                                            >
+                                                <option value="modern">Modern (Default)</option>
+                                                <option value="traditional">Traditional (B&W, Ink Saver)</option>
+                                                <option value="premium" disabled>Premium (Customizable - Premium Plan Only)</option>
+                                            </select>
+                                            <p className="text-xs text-amber-500 mt-1">Upgrade to Premium later to unlock the customizable Premium template.</p>
                                         </div>
                                     </div>
                                     

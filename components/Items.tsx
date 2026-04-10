@@ -7,6 +7,7 @@ import Modal from './common/Modal';
 import { validateRequired, validateNonNegative } from '../utils/validation';
 import { arrayToCSV, downloadCSV } from '../utils/csvExport';
 import { AlertTriangle, Search, Plus, Download, Upload, Edit, Trash2 } from 'lucide-react';
+import { trackEvent } from '../utils/analytics';
 
 interface ItemsProps {
   items: Item[];
@@ -167,8 +168,11 @@ const Items: React.FC<ItemsProps> = ({ items, setItems, company, onBulkDelete })
 
     if (editingItem.id) {
       setItems(items.map(i => i.id === editingItem.id ? editingItem : i));
+      trackEvent('update_item', { itemId: editingItem.id });
     } else {
-      setItems([...items, { ...editingItem, id: Date.now().toString() }]);
+      const newId = Date.now().toString();
+      setItems([...items, { ...editingItem, id: newId }]);
+      trackEvent('create_item', { itemId: newId });
     }
     handleCloseModal();
   };

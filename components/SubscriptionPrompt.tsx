@@ -2,6 +2,7 @@ import React from 'react';
 import { CheckCircle2, Zap, PlusCircle } from 'lucide-react';
 import Modal from './common/Modal';
 import Button from './common/Button';
+import { trackEvent } from '../utils/analytics';
 
 interface SubscriptionPromptProps {
   isOpen: boolean;
@@ -10,6 +11,11 @@ interface SubscriptionPromptProps {
 }
 
 const SubscriptionPrompt: React.FC<SubscriptionPromptProps> = ({ isOpen, onClose, onSubscribe }) => {
+  const handleSubscribe = (plan: string) => {
+    trackEvent('initiate_subscription', { plan });
+    onSubscribe(plan);
+  };
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Upgrade or Buy Add-ons">
       <div className="p-6 max-w-5xl w-full max-h-[80vh] overflow-y-auto">
@@ -33,7 +39,7 @@ const SubscriptionPrompt: React.FC<SubscriptionPromptProps> = ({ isOpen, onClose
               <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-accent" /> 50 invoices/month</li>
               <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-accent" /> Billed Monthly</li>
             </ul>
-            <Button onClick={() => onSubscribe('basic')} className="w-full">Choose Basic</Button>
+            <Button onClick={() => handleSubscribe('basic')} className="w-full">Choose Basic</Button>
           </div>
 
           {/* Standard */}
@@ -50,7 +56,7 @@ const SubscriptionPrompt: React.FC<SubscriptionPromptProps> = ({ isOpen, onClose
               <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-accent" /> 100 invoices/month</li>
               <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-accent" /> Billed Quarterly</li>
             </ul>
-            <Button onClick={() => onSubscribe('standard')} className="w-full">Choose Standard</Button>
+            <Button onClick={() => handleSubscribe('standard')} className="w-full">Choose Standard</Button>
           </div>
 
           {/* Premium */}
@@ -64,7 +70,7 @@ const SubscriptionPrompt: React.FC<SubscriptionPromptProps> = ({ isOpen, onClose
               <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-accent" /> 300 invoices/month</li>
               <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-accent" /> Billed Yearly</li>
             </ul>
-            <Button onClick={() => onSubscribe('premium')} className="w-full">Choose Premium</Button>
+            <Button onClick={() => handleSubscribe('premium')} className="w-full">Choose Premium</Button>
           </div>
         </div>
 
@@ -80,7 +86,7 @@ const SubscriptionPrompt: React.FC<SubscriptionPromptProps> = ({ isOpen, onClose
                 <div className="font-bold text-slate-900 dark:text-white">+50 Invoices</div>
                 <div className="text-accent font-semibold">₹99</div>
               </div>
-              <Button variant="outline" size="sm" onClick={() => onSubscribe('addon_50')} className="flex items-center gap-1">
+              <Button variant="outline" size="sm" onClick={() => handleSubscribe('addon_50')} className="flex items-center gap-1">
                 <PlusCircle className="w-4 h-4" /> Add
               </Button>
             </div>
@@ -90,7 +96,7 @@ const SubscriptionPrompt: React.FC<SubscriptionPromptProps> = ({ isOpen, onClose
                 <div className="font-bold text-slate-900 dark:text-white">+200 Invoices</div>
                 <div className="text-accent font-semibold">₹299</div>
               </div>
-              <Button variant="outline" size="sm" onClick={() => onSubscribe('addon_200')} className="flex items-center gap-1">
+              <Button variant="outline" size="sm" onClick={() => handleSubscribe('addon_200')} className="flex items-center gap-1">
                 <PlusCircle className="w-4 h-4" /> Add
               </Button>
             </div>
@@ -100,7 +106,7 @@ const SubscriptionPrompt: React.FC<SubscriptionPromptProps> = ({ isOpen, onClose
                 <div className="font-bold text-slate-900 dark:text-white">+500 Invoices</div>
                 <div className="text-accent font-semibold">₹499</div>
               </div>
-              <Button variant="outline" size="sm" onClick={() => onSubscribe('addon_500')} className="flex items-center gap-1">
+              <Button variant="outline" size="sm" onClick={() => handleSubscribe('addon_500')} className="flex items-center gap-1">
                 <PlusCircle className="w-4 h-4" /> Add
               </Button>
             </div>

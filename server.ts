@@ -6,6 +6,8 @@ import dotenv from "dotenv";
 import path from "path";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
+import rateLimit from "express-rate-limit";
+import helmet from "helmet";
 
 console.log("Starting server.ts...");
 
@@ -38,15 +40,67 @@ if (supabaseUrl && supabaseServiceKey) {
   console.warn("Supabase keys missing. Webhooks will not work correctly.");
 }
 
+// Rate limiters
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per `window` (here, per 15 minutes)
+  message: { error: "Too many requests from this IP, please try again after 15 minutes" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const authLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10, // Limit each IP to 10 auth requests per hour
+  message: { error: "Too many authentication attempts, please try again after an hour" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Middleware to verify Supabase JWT
+const verifyAuth = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Missing or invalid authorization header" });
+  }
+
+  const token = authHeader.split(" ")[1];
+  if (!supabase) {
+    return res.status(500).json({ error: "Supabase client not initialized on server" });
+  }
+
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+
+  if (error || !user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  // Attach user to request
+  (req as any).user = user;
+  next();
+};
+
 async function startServer() {
   console.log("In startServer()...");
   const app = express();
   const PORT = 3000;
 
-  app.use(cors());
+  // Security headers
+  app.use(helmet({
+    contentSecurityPolicy: false, // Disable CSP for Vite dev server compatibility
+  }));
+
+  app.use(cors({
+    origin: process.env.APP_URL || "*",
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  }));
 
   // Use JSON parser for all routes
   app.use(express.json());
+
+  // Apply rate limiting to all /api routes
+  app.use("/api/", apiLimiter);
 
   // API routes FIRST
   app.get("/api/health", (req, res) => {
@@ -55,10 +109,26 @@ async function startServer() {
 
   console.log("Registering API routes...");
 
-  app.post("/api/create-cashfree-order", async (req, res) => {
+  app.post("/api/create-cashfree-order", verifyAuth, async (req, res) => {
     try {
       const { plan, companyId, customerPhone, customerEmail, customerName } = req.body;
+      const user = (req as any).user;
       
+      // IDOR Check: Verify the user owns the company
+      const { data: companyData, error: fetchError } = await supabase
+        .from('companies')
+        .select('owner_id')
+        .eq('id', companyId)
+        .single();
+
+      if (fetchError || !companyData) {
+        return res.status(404).json({ error: "Company not found" });
+      }
+
+      if (companyData.owner_id !== user.id) {
+        return res.status(403).json({ error: "Forbidden: You do not own this company" });
+      }
+
       let amount = 0;
       if (plan === "basic") amount = 199;
       else if (plan === "standard") amount = 499;

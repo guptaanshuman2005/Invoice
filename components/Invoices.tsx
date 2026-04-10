@@ -40,12 +40,11 @@ export const numberToWords = (num: number): string => {
     return finalOutput + ' Only';
 };
 
-// --- Reusable Invoice Content Component (Legacy for Preview) ---
-export const InvoiceContent: React.FC<{ invoice: Invoice, company: Company, documentTitle?: string }> = ({ invoice, company, documentTitle = 'Invoice' }) => {
+// --- Invoice Templates ---
+
+const ModernInvoiceContent: React.FC<{ invoice: Invoice, company: Company, documentTitle?: string }> = ({ invoice, company, documentTitle = 'Invoice' }) => {
     const selectedBankAccount = company.bankAccounts.find(ba => ba.id === invoice.selectedBankAccountId);
     const currency = '₹';
-    
-    // Handle Polymorphism between Invoice and Quotation
     const docNumber = invoice.invoiceNumber || (invoice as any).quotationNumber;
     const dateLabel = documentTitle === 'Quotation' ? 'Date' : 'Invoice Date';
     const validUntilLabel = documentTitle === 'Quotation' ? 'Valid Until' : 'Due Date';
@@ -74,14 +73,14 @@ export const InvoiceContent: React.FC<{ invoice: Invoice, company: Company, docu
                 </div>
                 <div className="text-right">
                     <h2 className="text-5xl font-extrabold text-slate-100 uppercase tracking-wide leading-none absolute top-12 right-12 z-0 opacity-50">{documentTitle}</h2>
-                    <div className="relative z-10 bg-white/90 backdrop-blur-sm p-4 rounded-xl border border-slate-100 shadow-sm mt-4">
+                    <div className="relative z-10 bg-white/90 backdrop-blur-sm p-4 rounded-xl border border-slate-200 shadow-sm mt-4">
                         <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-left">
                             <span className="text-slate-500 font-medium text-xs uppercase">{documentTitle} No</span>
                             <span className="font-bold text-slate-900">{docNumber}</span>
                             <span className="text-slate-500 font-medium text-xs uppercase">{dateLabel}</span>
                             <span className="font-semibold">{invoice.issueDate}</span>
                             <span className="text-slate-500 font-medium text-xs uppercase">{validUntilLabel}</span>
-                            <span className="font-semibold text-accent">{validUntilValue}</span>
+                            <span className="font-semibold text-slate-900">{validUntilValue}</span>
                         </div>
                     </div>
                 </div>
@@ -153,23 +152,23 @@ export const InvoiceContent: React.FC<{ invoice: Invoice, company: Company, docu
                     )}
                 </div>
                 <div className="w-72 shrink-0">
-                    <div className="bg-slate-900 text-white p-6 rounded-2xl shadow-lg">
-                        <div className="space-y-2 text-sm opacity-90">
+                    <div className="bg-white border-2 border-slate-200 text-slate-800 p-6 rounded-2xl">
+                        <div className="space-y-2 text-sm">
                             <div className="flex justify-between"><span>Subtotal</span><span>{currency}{invoice.subTotal.toFixed(2)}</span></div>
                             
                             {(invoice.cgst > 0 || invoice.sgst > 0) && (
                                 <>
-                                    <div className="flex justify-between text-slate-300"><span>CGST</span><span>{currency}{invoice.cgst.toFixed(2)}</span></div>
-                                    <div className="flex justify-between text-slate-300"><span>SGST</span><span>{currency}{invoice.sgst.toFixed(2)}</span></div>
+                                    <div className="flex justify-between text-slate-600"><span>CGST</span><span>{currency}{invoice.cgst.toFixed(2)}</span></div>
+                                    <div className="flex justify-between text-slate-600"><span>SGST</span><span>{currency}{invoice.sgst.toFixed(2)}</span></div>
                                 </>
                             )}
                             
                             {invoice.igst > 0 && (
-                                <div className="flex justify-between text-slate-300"><span>IGST</span><span>{currency}{invoice.igst.toFixed(2)}</span></div>
+                                <div className="flex justify-between text-slate-600"><span>IGST</span><span>{currency}{invoice.igst.toFixed(2)}</span></div>
                             )}
                         </div>
-                        <div className="border-t border-white/20 my-4"></div>
-                        <div className="flex justify-between text-xl font-bold">
+                        <div className="border-t border-slate-200 my-4"></div>
+                        <div className="flex justify-between text-xl font-bold text-slate-900">
                             <span>Total</span>
                             <span>{currency}{invoice.grandTotal.toFixed(2)}</span>
                         </div>
@@ -191,6 +190,303 @@ export const InvoiceContent: React.FC<{ invoice: Invoice, company: Company, docu
             </div>
         </div>
     );
+};
+
+const TraditionalInvoiceContent: React.FC<{ invoice: Invoice, company: Company, documentTitle?: string }> = ({ invoice, company, documentTitle = 'Invoice' }) => {
+    const selectedBankAccount = company.bankAccounts.find(ba => ba.id === invoice.selectedBankAccountId);
+    const currency = 'Rs.';
+    const docNumber = invoice.invoiceNumber || (invoice as any).quotationNumber;
+    const dateLabel = documentTitle === 'Quotation' ? 'Date' : 'Invoice Date';
+    const validUntilLabel = documentTitle === 'Quotation' ? 'Valid Until' : 'Due Date';
+    const validUntilValue = documentTitle === 'Quotation' ? ((invoice as any).validUntil || invoice.dueDate) : invoice.dueDate;
+
+    return (
+        <div className="bg-white text-black font-serif text-sm leading-normal p-10 max-w-[210mm] mx-auto box-border h-full flex flex-col relative border border-black">
+            <div className="text-center border-b border-black pb-4 mb-4">
+                <h2 className="text-xl font-bold uppercase tracking-widest mb-2">{documentTitle}</h2>
+                <h1 className="text-2xl font-bold">{company.details?.name || 'Company Name'}</h1>
+                <p className="text-xs mt-1">{company.details?.address || ''}, {company.details?.city || ''} {company.details?.zip || ''}, {company.details?.state || ''}</p>
+                <p className="text-xs">Ph: {company.details?.phone || 'N/A'} | Email: {company.details?.email || 'N/A'}</p>
+                {company.details?.gstin && <p className="text-xs font-bold mt-1">GSTIN: {company.details.gstin}</p>}
+            </div>
+
+            <div className="flex border-b border-black pb-4 mb-4">
+                <div className="flex-1 border-r border-black pr-4">
+                    <p className="font-bold text-xs uppercase mb-1">Billed To:</p>
+                    <p className="font-bold">{invoice.client?.name || 'Unknown Client'}</p>
+                    <p className="text-xs">{invoice.client?.address || ''}</p>
+                    <p className="text-xs">{invoice.client?.city || ''}, {invoice.client?.state || ''} {invoice.client?.zip || ''}</p>
+                    {invoice.client?.gstin && <p className="text-xs font-bold mt-1">GSTIN: {invoice.client.gstin}</p>}
+                </div>
+                <div className="flex-1 pl-4">
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                        <span className="font-bold">{documentTitle} No:</span>
+                        <span>{docNumber}</span>
+                        <span className="font-bold">{dateLabel}:</span>
+                        <span>{invoice.issueDate}</span>
+                        <span className="font-bold">{validUntilLabel}:</span>
+                        <span>{validUntilValue}</span>
+                    </div>
+                </div>
+            </div>
+
+            <table className="w-full text-xs border-collapse border border-black mb-4">
+                <thead>
+                    <tr className="border-b border-black">
+                        <th className="border-r border-black p-2 text-left w-10">S.No</th>
+                        <th className="border-r border-black p-2 text-left">Description of Goods/Services</th>
+                        <th className="border-r border-black p-2 text-center w-20">HSN/SAC</th>
+                        <th className="border-r border-black p-2 text-right w-16">Qty</th>
+                        <th className="border-r border-black p-2 text-right w-20">Rate</th>
+                        <th className="p-2 text-right w-24">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {invoice.items.map((item, index) => (
+                        <tr key={index} className="border-b border-black">
+                            <td className="border-r border-black p-2">{index + 1}</td>
+                            <td className="border-r border-black p-2 font-bold">{item.name}</td>
+                            <td className="border-r border-black p-2 text-center">{item.hsn || '-'}</td>
+                            <td className="border-r border-black p-2 text-right">{item.quantity} {item.unit}</td>
+                            <td className="border-r border-black p-2 text-right">{item.price.toFixed(2)}</td>
+                            <td className="p-2 text-right">{(item.price * item.quantity).toFixed(2)}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+
+            <div className="flex border border-black mb-4 break-inside-avoid">
+                <div className="flex-1 border-r border-black p-4 flex flex-col justify-between">
+                    <div>
+                        <p className="text-xs font-bold mb-1">Amount in Words:</p>
+                        <p className="text-xs italic capitalize">{numberToWords(invoice.grandTotal)}</p>
+                    </div>
+                    {selectedBankAccount && (
+                        <div className="mt-4 text-xs">
+                            <p className="font-bold mb-1">Bank Details:</p>
+                            <p>Bank: {selectedBankAccount.bankName}</p>
+                            <p>A/C No: {selectedBankAccount.accountNumber}</p>
+                            <p>IFSC: {selectedBankAccount.ifsc}</p>
+                        </div>
+                    )}
+                </div>
+                <div className="w-64 p-0">
+                    <div className="flex justify-between p-2 border-b border-black text-xs">
+                        <span>Taxable Amount</span>
+                        <span>{invoice.subTotal.toFixed(2)}</span>
+                    </div>
+                    {(invoice.cgst > 0 || invoice.sgst > 0) && (
+                        <>
+                            <div className="flex justify-between p-2 border-b border-black text-xs">
+                                <span>Add: CGST</span>
+                                <span>{invoice.cgst.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between p-2 border-b border-black text-xs">
+                                <span>Add: SGST</span>
+                                <span>{invoice.sgst.toFixed(2)}</span>
+                            </div>
+                        </>
+                    )}
+                    {invoice.igst > 0 && (
+                        <div className="flex justify-between p-2 border-b border-black text-xs">
+                            <span>Add: IGST</span>
+                            <span>{invoice.igst.toFixed(2)}</span>
+                        </div>
+                    )}
+                    <div className="flex justify-between p-2 font-bold text-sm">
+                        <span>Total Amount</span>
+                        <span>{currency} {invoice.grandTotal.toFixed(2)}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div className="flex justify-between mt-auto pt-4">
+                <div className="w-1/2 text-xs">
+                    <p className="font-bold mb-1">Terms & Conditions:</p>
+                    <p>{invoice.notes || 'E. & O.E.'}</p>
+                </div>
+                <div className="w-1/2 text-right flex flex-col items-end">
+                    <p className="font-bold text-xs mb-8">For {company.details?.name || 'Company Name'}</p>
+                    {company.details?.signature && <img src={company.details.signature} className="h-10 w-auto mb-1" alt="Sign"/>}
+                    <p className="text-xs border-t border-black pt-1 inline-block">Authorized Signatory</p>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const PremiumInvoiceContent: React.FC<{ invoice: Invoice, company: Company, documentTitle?: string }> = ({ invoice, company, documentTitle = 'Invoice' }) => {
+    const selectedBankAccount = company.bankAccounts.find(ba => ba.id === invoice.selectedBankAccountId);
+    const currency = '₹';
+    const docNumber = invoice.invoiceNumber || (invoice as any).quotationNumber;
+    const dateLabel = documentTitle === 'Quotation' ? 'Date' : 'Invoice Date';
+    const validUntilLabel = documentTitle === 'Quotation' ? 'Valid Until' : 'Due Date';
+    const validUntilValue = documentTitle === 'Quotation' ? ((invoice as any).validUntil || invoice.dueDate) : invoice.dueDate;
+    
+    const brandColor = company.details?.brandColor || '#4F46E5';
+
+    return (
+        <div className="bg-white text-slate-800 font-sans text-sm leading-normal max-w-[210mm] mx-auto box-border h-full flex flex-col relative shadow-2xl overflow-hidden">
+            {/* Premium Header with Brand Color */}
+            <div className="p-12 pb-8 text-white relative" style={{ backgroundColor: brandColor }}>
+                <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-10 rounded-full -translate-y-1/2 translate-x-1/3 blur-2xl"></div>
+                <div className="flex justify-between items-start relative z-10">
+                    <div className="flex gap-6 items-center">
+                        {company.details?.logo ? (
+                            <div className="bg-white p-2 rounded-xl shadow-lg">
+                                <img src={company.details.logo} alt="Logo" className="h-20 w-20 object-contain" />
+                            </div>
+                        ) : (
+                            <div className="h-20 w-20 bg-white/20 rounded-xl flex items-center justify-center font-bold text-2xl backdrop-blur-sm shadow-inner">{company.details?.name?.substring(0,2) || 'CO'}</div>
+                        )}
+                        <div>
+                            <h1 className="text-3xl font-extrabold tracking-tight">{company.details?.name || 'Company Name'}</h1>
+                            <p className="text-white/80 mt-1 text-sm">{company.details?.email} | {company.details?.phone}</p>
+                            {company.details?.gstin && <p className="text-white/90 font-medium text-sm mt-1">GSTIN: {company.details.gstin}</p>}
+                        </div>
+                    </div>
+                    <div className="text-right">
+                        <h2 className="text-4xl font-black uppercase tracking-widest opacity-90">{documentTitle}</h2>
+                        <p className="text-xl font-medium mt-1 opacity-90">#{docNumber}</p>
+                    </div>
+                </div>
+            </div>
+
+            <div className="p-12 flex-grow flex flex-col">
+                {/* Details Bar */}
+                <div className="flex justify-between items-center bg-slate-50 p-4 rounded-xl mb-8 border border-slate-100">
+                    <div>
+                        <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">{dateLabel}</p>
+                        <p className="font-semibold text-slate-800">{invoice.issueDate}</p>
+                    </div>
+                    <div className="w-px h-8 bg-slate-200"></div>
+                    <div>
+                        <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">{validUntilLabel}</p>
+                        <p className="font-semibold text-slate-800">{validUntilValue}</p>
+                    </div>
+                    <div className="w-px h-8 bg-slate-200"></div>
+                    <div className="text-right">
+                        <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Amount Due</p>
+                        <p className="font-bold text-lg" style={{ color: brandColor }}>{currency}{invoice.grandTotal.toFixed(2)}</p>
+                    </div>
+                </div>
+
+                {/* Addresses */}
+                <div className="flex gap-12 mb-10">
+                    <div className="flex-1">
+                        <h3 className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: brandColor }}>Billed To</h3>
+                        <p className="font-bold text-lg text-slate-900">{invoice.client?.name || 'Unknown Client'}</p>
+                        <div className="text-sm text-slate-600 mt-2 space-y-1">
+                            <p>{invoice.client?.address || ''}</p>
+                            <p>{invoice.client?.city || ''}, {invoice.client?.state || ''} {invoice.client?.zip || ''}</p>
+                            {invoice.client?.gstin && <p className="mt-2 font-medium text-slate-800 text-xs bg-slate-100 inline-block px-2 py-1 rounded">GSTIN: {invoice.client.gstin}</p>}
+                        </div>
+                    </div>
+                    <div className="flex-1">
+                        <h3 className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: brandColor }}>Company Details</h3>
+                        <div className="text-sm text-slate-600 space-y-1">
+                            <p>{company.details?.address || ''}</p>
+                            <p>{company.details?.city || ''}, {company.details?.state || ''} {company.details?.zip || ''}</p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Items */}
+                <div className="mb-8">
+                    <table className="w-full text-sm">
+                        <thead>
+                            <tr className="border-b-2" style={{ borderColor: brandColor }}>
+                                <th className="py-3 px-2 text-left font-bold text-slate-800 w-10">#</th>
+                                <th className="py-3 px-2 text-left font-bold text-slate-800">Description</th>
+                                <th className="py-3 px-2 text-center font-bold text-slate-800 w-24">HSN</th>
+                                <th className="py-3 px-2 text-right font-bold text-slate-800 w-20">Qty</th>
+                                <th className="py-3 px-2 text-right font-bold text-slate-800 w-24">Price</th>
+                                <th className="py-3 px-2 text-right font-bold text-slate-800 w-28">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {invoice.items.map((item, index) => (
+                                <tr key={index} className="group hover:bg-slate-50 transition-colors">
+                                    <td className="py-4 px-2 align-top text-slate-400">{index + 1}</td>
+                                    <td className="py-4 px-2 align-top font-medium text-slate-900">{item.name}</td>
+                                    <td className="py-4 px-2 align-top text-center text-slate-500">{item.hsn || '-'}</td>
+                                    <td className="py-4 px-2 align-top text-right text-slate-600">{item.quantity} <span className="text-[10px] uppercase">{item.unit}</span></td>
+                                    <td className="py-4 px-2 align-top text-right text-slate-600">{item.price.toFixed(2)}</td>
+                                    <td className="py-4 px-2 align-top text-right font-bold text-slate-900">{(item.price * item.quantity).toFixed(2)}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+
+                {/* Footer Calculation */}
+                <div className="flex gap-12 items-start break-inside-avoid mt-auto">
+                    <div className="flex-1 space-y-6">
+                        <div>
+                            <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: brandColor }}>Amount in Words</p>
+                            <p className="text-sm font-medium text-slate-700 capitalize">{numberToWords(invoice.grandTotal)}</p>
+                        </div>
+                        {selectedBankAccount && (
+                            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: brandColor }}>Payment Details</p>
+                                <div className="grid grid-cols-2 gap-2 text-sm">
+                                    <span className="text-slate-500">Bank:</span><span className="font-medium text-slate-800">{selectedBankAccount.bankName}</span>
+                                    <span className="text-slate-500">A/C No:</span><span className="font-medium text-slate-800">{selectedBankAccount.accountNumber}</span>
+                                    <span className="text-slate-500">IFSC:</span><span className="font-medium text-slate-800">{selectedBankAccount.ifsc}</span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                    <div className="w-72 shrink-0">
+                        <div className="space-y-3 text-sm p-4">
+                            <div className="flex justify-between text-slate-600"><span>Subtotal</span><span>{currency}{invoice.subTotal.toFixed(2)}</span></div>
+                            
+                            {(invoice.cgst > 0 || invoice.sgst > 0) && (
+                                <>
+                                    <div className="flex justify-between text-slate-500"><span>CGST</span><span>{currency}{invoice.cgst.toFixed(2)}</span></div>
+                                    <div className="flex justify-between text-slate-500"><span>SGST</span><span>{currency}{invoice.sgst.toFixed(2)}</span></div>
+                                </>
+                            )}
+                            
+                            {invoice.igst > 0 && (
+                                <div className="flex justify-between text-slate-500"><span>IGST</span><span>{currency}{invoice.igst.toFixed(2)}</span></div>
+                            )}
+                        </div>
+                        <div className="flex justify-between items-center text-xl font-bold text-white p-4 rounded-xl mt-2 shadow-md" style={{ backgroundColor: brandColor }}>
+                            <span>Total</span>
+                            <span>{currency}{invoice.grandTotal.toFixed(2)}</span>
+                        </div>
+                    </div>
+                </div>
+                
+                {/* Signature Area */}
+                <div className="mt-10 flex justify-between items-end pt-6 border-t border-slate-200">
+                    <div className="text-xs text-slate-500 max-w-sm">
+                        <p className="font-bold text-slate-700 mb-1">Notes:</p>
+                        <p>{invoice.notes || 'Thank you for your business.'}</p>
+                    </div>
+                    <div className="text-center">
+                        {company.details?.signature && <img src={company.details.signature} className="h-14 w-auto mx-auto mb-2" alt="Sign"/>}
+                        <p className="font-bold text-slate-900 text-sm">{company.details?.name || 'Company Name'}</p>
+                        <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-1">Authorized Signatory</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export const InvoiceContent: React.FC<{ invoice: Invoice, company: Company, documentTitle?: string }> = ({ invoice, company, documentTitle = 'Invoice' }) => {
+    const template = company.details?.invoiceTemplate || 'modern';
+    
+    if (template === 'traditional') {
+        return <TraditionalInvoiceContent invoice={invoice} company={company} documentTitle={documentTitle} />;
+    }
+    if (template === 'premium' && company.subscription?.plan === 'premium') {
+        return <PremiumInvoiceContent invoice={invoice} company={company} documentTitle={documentTitle} />;
+    }
+    
+    return <ModernInvoiceContent invoice={invoice} company={company} documentTitle={documentTitle} />;
 };
 
 export const InvoiceView: React.FC<{ invoice: Invoice; company: Company; onClose: () => void; onStatusChange?: (id: string, status: any) => void; documentTitle?: string }> = ({ invoice, company, onClose, onStatusChange, documentTitle = 'Invoice' }) => {

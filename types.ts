@@ -24,6 +24,7 @@ export interface CompanyDetails {
   nextInvoiceNumber: number;
   signature?: string;
   brandColor?: string; // Added for visual customization
+  invoiceTemplate?: 'modern' | 'traditional' | 'premium';
 }
 
 export interface Client {
